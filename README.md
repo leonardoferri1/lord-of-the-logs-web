@@ -1,6 +1,6 @@
 # Lord of the Logs — browser client
 
-Original isometric multiplayer client built with **React, Phaser 3, TypeScript, Vite, Tailwind, Zustand and TanStack Query**. Explore the Vale do Carvalho, gather resources and build a persistent settlement together.
+Original isometric pixel-art multiplayer client built with **React, Phaser 3, TypeScript, Vite, Tailwind, Zustand and TanStack Query**. Gather, build, farm, forge, fight goblins and complete quests in a persistent shared world.
 
 ![The shared world](https://raw.githubusercontent.com/leonardoferri1/lord-of-the-logs/main/docs/screenshots/world.png)
 
@@ -38,13 +38,14 @@ Game-rule unit tests belong to the shared repository; authoritative gameplay int
 
 ## Controls and boundaries
 
-- Click the ground to move; click a resource to approach it and press **E** to gather.
-- **B** opens construction, **F** centers the camera, **Esc** cancels selection/placement.
-- Arrow keys or right-drag pan; mouse wheel zooms.
+- Click a tree, rock, iron vein or berry bush: the character walks beside it and keeps gathering until it is depleted or energy runs low.
+- Click a goblin to attack; click the blacksmith or merchant to walk over and open their dialog; click your own building to collect, plant, harvest or rest.
+- **B** construction, **I** inventory, **M** world map, **J** missions, **H** guide, **O** settings, **1–8** hotbar (6 eats), **E** gather/use the selection, **F** centers the camera, **Enter** chats, **Esc** cancels.
+- Arrow keys or right-drag pan; mouse wheel zooms. The camera follows the character until you pan.
 - Two new tabs can create independent characters. Refresh restores the active tab session. The entry screen can explicitly resume the browser's last character.
 
-The browser only submits intentions. Inventory, movement, harvesting time, costs and placement are validated on the server. Disconnection disables gameplay instead of pretending that local changes are persistent.
+The browser only submits intentions. Inventory, movement, gathering time, damage, loot, quest progress, costs and placement are validated on the server. Disconnection disables gameplay instead of pretending that local changes are persistent.
 
-Sprites are original procedural drawings baked into Phaser textures. No external game assets are used. The world renders outside React; Zustand carries HUD state and snapshots. A* and placement helpers assist previews but never authorize an economic mutation.
+All art is original pixel art painted in code (`src/game/pixel.ts`, `sprites.ts`, `props.ts`, `ground.ts`): palette-indexed character and icon sprites with automatic outlines, dithered sphere shading for foliage and rocks, isometric buildings with plank walls and shingle roofs, and one baked terrain canvas with organic borders, cliffs, shore foam and bridges. Textures are nearest-filtered at 2×. The HUD icons are rendered from the same sprites. The only external asset is the Pixelify Sans font (OFL), bundled through `@fontsource`. The world renders outside React; Zustand carries HUD state and snapshots. A* and placement helpers assist previews but never authorize an economic mutation.
 
 Desktop is the primary target. Panels adapt on smaller screens, but full touch-camera interaction and canvas screen-reader navigation remain future work. The Phaser engine is a separate approximately 340 KB gzip vendor chunk. No client-only offline economy is implemented.
