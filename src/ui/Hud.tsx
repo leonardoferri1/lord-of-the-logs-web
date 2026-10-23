@@ -140,6 +140,8 @@ const CURRENCY: { item: Item; icon: string; label: string }[] = [
 export function Resources() {
   const snapshot = useWorld((s) => s.snapshot);
   const connected = useWorld((s) => s.connected);
+  const muted = useWorld((s) => s.settings.muted);
+  const configure = useWorld((s) => s.configure);
   return (
     <div className="resources panel" aria-label="Recursos">
       {CURRENCY.map((c) => (
@@ -148,6 +150,15 @@ export function Resources() {
           <b>{fmt(snapshot?.inventory[c.item] ?? 0)}</b>
         </span>
       ))}
+      <button
+        className="sound-toggle"
+        onClick={() => configure({ muted: !muted })}
+        aria-pressed={muted}
+        aria-label={muted ? 'Ativar som (N)' : 'Silenciar (N)'}
+        title={muted ? 'Ativar som (N)' : 'Silenciar (N)'}
+      >
+        <Icon name={muted ? 'mute' : 'sound'} size={22} />
+      </button>
       <span className="chip online" title={connected ? 'Viajantes no vale' : 'Reconectando'}>
         <i className={connected ? 'live-dot' : 'offline-dot'} />
         <b>{snapshot?.players.length ?? 0}</b>

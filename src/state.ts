@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import type { BuildingKind, ChatMessage, Point, ResourceNode, Snapshot } from '@logs/shared';
+import type { Mix } from './game/audio';
 
 export type WorldSnapshot = Snapshot & { nodes: ResourceNode[] };
 /** What the character is walking towards; the scene fulfils it on arrival. */
 export type Intent =
   { type: 'gather'; id: string } | { type: 'npc'; id: string } | { type: 'building'; id: string };
 export type Panel = 'inventory' | 'build' | 'map' | 'quests' | 'settings' | 'help' | null;
-export type Settings = { names: boolean; cycle: boolean; quests: boolean };
+export type Settings = { names: boolean; cycle: boolean; quests: boolean } & Mix;
 type UiState = {
   snapshot: WorldSnapshot | null;
   /** Client clock minus server clock, for timers sent in server time. */
@@ -31,7 +32,16 @@ type UiState = {
 };
 let sequence = 0;
 function loadSettings(): Settings {
-  const defaults = { names: true, cycle: true, quests: true };
+  const defaults: Settings = {
+    names: true,
+    cycle: true,
+    quests: true,
+    volume: 70,
+    music: 45,
+    effects: 80,
+    ambience: 60,
+    muted: false,
+  };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem('logs:settings') || '{}') };
   } catch {

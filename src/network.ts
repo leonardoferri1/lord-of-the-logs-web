@@ -1,6 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 import type { ClientEvents, ServerEvents, Point, BuildingKind, Item, Tool } from '@logs/shared';
-import { useWorld } from './state';
+import { useWorld, selfOf } from './state';
+import { sound, type Sfx } from './game/audio';
 export const API = import.meta.env.VITE_API_URL || '';
 let socket: Socket<ServerEvents, ClientEvents> | undefined;
 const live = () => (socket?.connected ? socket : undefined);
@@ -26,6 +27,8 @@ export function connect(token: string) {
     useWorld.getState().notify('Conexão interrompida. Tentando reconectar ao vale…', true);
   });
   socket.on('result', (result) => {
+    const cue = resultSound(result.ok, result.message);
+    if (cue) sound.play(cue);
     // Routine gathering already floats over the resource; only notable results become toasts.
     if (result.ok && result.message.startsWith('+') && !result.message.includes('Nível')) return;
     useWorld.getState().notify(result.message, !result.ok);
@@ -34,7 +37,19 @@ export function connect(token: string) {
   socket.on('chat', (message) => {
     const state = useWorld.getState();
     state.set({ chat: [...state.chat.slice(-59), message], unread: state.unread + 1 });
+    if (message.channel === 'global' && message.name !== selfOf(state.snapshot)?.name)
+      sound.play('chat');
   });
+}
+/** Results whose world effect has no sound of its own get a cue here; scene effects cover the rest. */
+function resultSound(ok: boolean, message: string): Sfx | null {
+  if (!ok) return message.startsWith('Você perdeu') ? null : 'error';
+  if (message.startsWith('Missão')) return 'quest';
+  if (message.includes('forjada')) return 'anvil';
+  if (/^(Vendeu|Comprou|Recolheu)/.test(message)) return 'coin';
+  if (/^(Você comeu|Você descansou)/.test(message)) return 'heal';
+  if (/^(Colheita|Trigo plantado)/.test(message)) return 'rustle';
+  return null;
 }
 export const move = (p: Point) => live()?.emit('move', p);
 export const gather = (nodeId: string) => live()?.emit('gather', { nodeId, actionId: actionId() });

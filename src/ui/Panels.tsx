@@ -191,9 +191,11 @@ export function MapPanel() {
     </Window>
   );
 }
+type Toggle = 'names' | 'cycle' | 'quests' | 'muted';
+type Level = 'volume' | 'music' | 'effects' | 'ambience';
 export function Settings() {
   const { settings, configure } = useWorld();
-  const toggle = (key: keyof typeof settings, label: string, hint: string) => (
+  const toggle = (key: Toggle, label: string, hint: string) => (
     <label className="toggle">
       <input
         type="checkbox"
@@ -206,8 +208,33 @@ export function Settings() {
       </span>
     </label>
   );
+  const slider = (key: Level, label: string) => (
+    <label className="slider">
+      <span>{label}</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={settings[key]}
+        disabled={settings.muted}
+        onChange={(e) => configure({ [key]: Number(e.target.value) })}
+        aria-valuetext={`${settings[key]}%`}
+      />
+      <b>{settings[key]}%</b>
+    </label>
+  );
   return (
     <Window title="Ajustes" onClose={close}>
+      <h3>Som</h3>
+      {toggle('muted', 'Silenciar tudo', 'Atalho: N. O som começa após o primeiro clique no jogo.')}
+      <div className="sliders">
+        {slider('volume', 'Volume geral')}
+        {slider('effects', 'Efeitos')}
+        {slider('music', 'Música')}
+        {slider('ambience', 'Ambiente')}
+      </div>
+      <h3>Jogo</h3>
       {toggle(
         'names',
         'Nomes sobre os personagens',
@@ -279,6 +306,9 @@ export function Help() {
         </span>
         <span>
           <kbd>Esc</kbd> Cancelar
+        </span>
+        <span>
+          <kbd>N</kbd> Som liga/desliga
         </span>
       </div>
       <p className="muted small">
