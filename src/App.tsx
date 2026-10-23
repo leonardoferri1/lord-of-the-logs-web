@@ -6,6 +6,7 @@ import { WorldScene } from './game/WorldScene';
 import { useWorld } from './state';
 import { API, connect, gather, interact } from './network';
 import { iconUrl } from './game/sprites';
+import { sound } from './game/audio';
 import {
   Chat,
   Hotbar,
@@ -25,27 +26,33 @@ import { Construction, Help, Inventory, MapPanel, Merchant, Settings, Smith } fr
 function GameCanvas() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const game = new Phaser.Game({
-      type: Phaser.AUTO,
-      parent: ref.current!,
-      backgroundColor: '#163e5c',
-      pixelArt: true,
-      scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
-      scene: WorldScene,
-      audio: { noAudio: true },
-    });
-    // Phaser caches the canvas position for pointer math; refresh it whenever layout settles.
     const container = ref.current!;
-    const observer = new ResizeObserver(() => game.scale.refresh());
-    const settle = () => game.scale.updateBounds();
+    let game: Phaser.Game | undefined;
+    // WebGL cannot allocate a 0 × 0 framebuffer, so the game starts only once the container has
+    // a real size (a page opened in a hidden tab has none) and ignores later collapses.
+    // Phaser also caches the canvas position for pointer math; refresh it whenever layout settles.
+    const observer = new ResizeObserver(() => {
+      if (!container.clientWidth || !container.clientHeight) return;
+      if (game) return game.scale.refresh();
+      game = new Phaser.Game({
+        type: Phaser.AUTO,
+        parent: container,
+        backgroundColor: '#163e5c',
+        pixelArt: true,
+        scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
+        scene: WorldScene,
+        audio: { noAudio: true },
+      });
+      // Dev-only handle for debugging the scene from the browser console.
+      if (import.meta.env.DEV) Object.assign(window, { __game: game, __sound: sound });
+    });
+    const settle = () => game?.scale.updateBounds();
     observer.observe(container);
     container.addEventListener('pointerenter', settle);
-    // Dev-only handle for debugging the scene from the browser console.
-    if (import.meta.env.DEV) Object.assign(window, { __game: game });
     return () => {
       observer.disconnect();
       container.removeEventListener('pointerenter', settle);
-      game.destroy(true);
+      game?.destroy(true);
     };
   }, []);
   return (
@@ -218,6 +225,7 @@ export default function App() {
           dialog: null,
         });
       if (k === 'j') s.configure({ quests: !s.settings.quests });
+      if (k === 'n') s.configure({ muted: !s.settings.muted });
       if (k === 'f') s.set({ focus: s.focus + 1 });
       if (/^[1-8]$/.test(k)) useSlotAction(Number(k) - 1);
       if (event.key === 'Escape')
@@ -232,6 +240,26 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [useSlotAction]);
+  useEffect(() => {
+    // Browsers only allow audio after a gesture; any click or key press unlocks it.
+    const unlock = () => sound.unlock();
+    const click = (event: MouseEvent) => {
+      if ((event.target as HTMLElement).closest('button:not(:disabled)')) sound.play('click');
+    };
+    sound.setMix(useWorld.getState().settings);
+    const unsubscribe = useWorld.subscribe((s, previous) => {
+      if (s.settings !== previous.settings) sound.setMix(s.settings);
+    });
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('click', click);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('click', click);
+    };
+  }, []);
   return (
     <main>
       <GameCanvas />

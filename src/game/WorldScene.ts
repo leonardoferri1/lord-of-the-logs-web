@@ -34,6 +34,8 @@ import { NPC_LOOKS, goblin, hero, heldTool, icon, lookFor, type Look } from './s
 import * as props from './props';
 import { ART, LEAVES } from './props';
 import { GROUND_ORIGIN, paintGround } from './ground';
+import { darkness } from './cycle';
+import { sound, type Surroundings } from './audio';
 
 type Ref = { type: 'node' | 'building' | 'landmark' | 'mob' | 'npc'; id: string };
 type Actor = {
@@ -45,6 +47,8 @@ type Actor = {
   skin: string;
   moved: number;
   lastTile: string;
+  strike: number;
+  step: string;
 };
 const LABEL = {
   fontFamily: '"Pixelify Sans", "Trebuchet MS", sans-serif',
@@ -54,21 +58,20 @@ const LABEL = {
   strokeThickness: 4,
   resolution: 2,
 };
-const CYCLE_MS = 12 * 60 * 1000;
-/** 0 by day, 1 at deepest night; shared by every client through the wall clock. */
-export function darkness(now = Date.now()) {
-  const t = (now % CYCLE_MS) / CYCLE_MS;
-  if (t < 0.5) return 0;
-  if (t < 0.6) return (t - 0.5) / 0.1;
-  if (t < 0.88) return 1;
-  return 1 - (t - 0.88) / 0.12;
-}
 const lerpColor = (a: number, b: number, t: number) =>
   Phaser.Display.Color.GetColor(
     ((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * t,
     ((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * t,
     (a & 255) + ((b & 255) - (a & 255)) * t,
   );
+/** Crackling sources: campfires, the forge and the plaza torches. */
+const FIRES: Point[] = [
+  ...LANDMARKS.filter((l) => l.kind === 'campfire' || l.kind === 'forge'),
+  { x: 18, y: 20 },
+  { x: 26, y: 20 },
+  { x: 18, y: 28 },
+  { x: 26, y: 28 },
+];
 const center = (p: Point, w: number, h = w) =>
   toIso({ x: p.x + (w - 1) / 2, y: p.y + (h - 1) / 2 });
 
@@ -87,6 +90,7 @@ export class WorldScene extends Phaser.Scene {
   private enemies = new Map<string, Actor>();
   private villagers = new Map<string, Actor>();
   private seen = new Set<number>();
+  private heard?: { tile: string; water: number; fire: number; forest: number };
   private lastSnapshot: WorldSnapshot | null = null;
   private focusRevision = -1;
   private follow = true;
@@ -409,6 +413,8 @@ export class WorldScene extends Phaser.Scene {
       skin,
       moved: 0,
       lastTile: '',
+      strike: 0,
+      step: '',
     };
   }
   private center(p: Point) {
@@ -575,6 +581,7 @@ export class WorldScene extends Phaser.Scene {
       if (b.kind === 'tower') this.glow(p.x - 4, p.y - 66, 0.6);
       this.structures.set(b.id, { image, texture, badge });
       // A short rise for structures that appear while we watch.
+      if (this.lastSnapshot) sound.play('build', b);
       if (this.lastSnapshot)
         this.tweens.add({
           targets: image,
@@ -706,6 +713,22 @@ export class WorldScene extends Phaser.Scene {
           : 1;
       const mob = p.attacking ? snapshot.mobs.find((m) => m.id === p.attacking) : undefined;
       this.holdTool(actor, tool, tier, !!p.gathering || (!!mob && distance(p, mob) <= 1), time);
+      // Tool strikes follow the swing animation; footsteps are only played for the local player.
+      if (gatheringNode && time - actor.strike > 560) {
+        actor.strike = time;
+        sound.play(
+          gatheringNode.kind === 'wood'
+            ? 'chop'
+            : gatheringNode.kind === 'food'
+              ? 'rustle'
+              : 'mine',
+          p,
+        );
+      }
+      if (p.id === snapshot.selfId && actor.step !== key(p)) {
+        if (actor.step) sound.play('step', p);
+        actor.step = key(p);
+      }
       actor.label
         .setText(`${p.name}  ${p.level}`)
         .setPosition(actor.body.x, actor.body.y - 54)
@@ -742,6 +765,7 @@ export class WorldScene extends Phaser.Scene {
       living.add(m.id);
       const visible = !m.dead;
       if (actor.body.visible && !visible) {
+        sound.play('goblin', m);
         this.tweens.add({
           targets: actor.body,
           alpha: 0,
@@ -822,6 +846,8 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     if (self) this.pursue(snapshot, self, time);
+    sound.listen(self ?? null);
+    sound.ambient(this.surroundings(self ?? { x: 22, y: 24 }, state.settings.cycle), delta);
     this.drawHighlight(snapshot);
     this.lighting(time, state.settings.cycle);
   }
@@ -961,6 +987,12 @@ export class WorldScene extends Phaser.Scene {
     const self =
       e.kind === 'hurt' &&
       snapshot.players.some((p) => p.id === snapshot.selfId && p.x === e.x && p.y === e.y);
+    if (e.kind === 'damage') sound.play('hit', e);
+    if (e.kind === 'hurt') sound.play('hurt', self ? undefined : e);
+    if (e.kind === 'xp') sound.play('reward', e);
+    if (e.kind === 'level') sound.play('level', e);
+    if (e.kind === 'death') sound.play('death', e);
+    if (e.kind === 'arrow') sound.play('arrow', e.from ?? e);
     if (e.kind === 'damage') float(`-${e.amount}`, '#ffffff', 18);
     if (e.kind === 'hurt') {
       float(`-${e.amount}`, '#ff6a5a', 17);
@@ -998,10 +1030,35 @@ export class WorldScene extends Phaser.Scene {
         duration: 260,
         onComplete: () => {
           arrow.destroy();
+          sound.play('hit', e);
           float(`-${e.amount}`, '#ffffff', 16);
         },
       });
     }
+  }
+  /** What the listener's tile sounds like: water, fire and forest nearby, and the hour. */
+  private surroundings(p: Point, cycle: boolean): Surroundings {
+    const tile = key(p);
+    if (this.heard?.tile !== tile) {
+      let water = 9,
+        fire = 9,
+        trees = 0;
+      for (let dy = -6; dy <= 6; dy++)
+        for (let dx = -6; dx <= 6; dx++) {
+          const t = terrain(p.x + dx, p.y + dy),
+            d = Math.hypot(dx, dy);
+          if (t === 'water') water = Math.min(water, d);
+          if (t === 'forest' && d <= 3) trees++;
+        }
+      for (const f of FIRES) fire = Math.min(fire, Math.hypot(f.x - p.x, f.y - p.y));
+      this.heard = {
+        tile,
+        water: Math.max(0, 1 - water / 6),
+        fire: Math.max(0, 1 - fire / 5),
+        forest: Math.min(1, trees / 18),
+      };
+    }
+    return { ...this.heard, darkness: cycle ? darkness() : 0 };
   }
   private lighting(time: number, cycle: boolean) {
     const d = cycle ? darkness() : 0;

@@ -988,6 +988,40 @@ h3 {
   font-size: 14px;
   line-height: 1.45;
 }
+.sliders {
+  display: grid;
+  gap: 8px;
+}
+.slider {
+  display: grid;
+  grid-template-columns: 110px 1fr 42px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.slider input {
+  accent-color: var(--gold);
+}
+.slider input:disabled {
+  opacity: 0.4;
+}
+.slider b {
+  font-family: var(--pixel);
+  text-align: right;
+  font-weight: 400;
+  color: var(--muted);
+}
+.sound-toggle {
+  border: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 7px;
+  padding: 2px 5px;
+  display: inline-flex;
+  align-items: center;
+}
+.sound-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
 .keys {
   display: grid;
   grid-template-columns: 1fr 1fr;
